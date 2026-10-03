@@ -1,0 +1,366 @@
+CREATE DATABASE IF NOT EXISTS timetable_v2;
+USE timetable_v2;
+
+-- Drop in dependency order so the script can be re-run
+DROP VIEW  IF EXISTS class_requirements;
+DROP TABLE IF EXISTS timetable;
+DROP TABLE IF EXISTS time_slots;
+DROP TABLE IF EXISTS subject_periods;
+DROP TABLE IF EXISTS classes;
+DROP TABLE IF EXISTS teacher_classes;
+DROP TABLE IF EXISTS teachers;
+
+-- ---------------------------------------------------------------
+-- TABLES
+-- ---------------------------------------------------------------
+-- Teachers
+CREATE TABLE teachers (
+    teacher_id INT PRIMARY KEY,
+    name       VARCHAR(100) NOT NULL
+);
+
+-- What each teacher can teach (a range of classes per subject)
+CREATE TABLE teacher_classes (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT          NOT NULL,
+    subject    VARCHAR(60)  NOT NULL,
+    class_from TINYINT      NOT NULL,
+    class_to   TINYINT      NOT NULL,
+    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+    CHECK (class_from BETWEEN 1 AND 12 AND class_to BETWEEN 1 AND 12 AND class_from <= class_to)
+);
+
+-- The actual class groups (one row per section)
+CREATE TABLE classes (
+    class_id    INT AUTO_INCREMENT PRIMARY KEY,
+    class_level TINYINT     NOT NULL,
+    section     CHAR(1)     NOT NULL,
+    stream      VARCHAR(20) NOT NULL DEFAULT 'ALL',   -- ALL for classes 1-10; PCM / PCB / COMMERCE for 11-12
+    UNIQUE (class_level, section),
+    CHECK (class_level BETWEEN 1 AND 12)
+);
+
+-- Weekly periods each subject needs, per grade and stream (same for every section)
+CREATE TABLE subject_periods (
+    class_level      TINYINT     NOT NULL,
+    stream           VARCHAR(20) NOT NULL DEFAULT 'ALL',
+    subject          VARCHAR(60) NOT NULL,
+    periods_per_week TINYINT     NOT NULL,
+    PRIMARY KEY (class_level, stream, subject),
+    CHECK (periods_per_week > 0)
+);
+
+-- The 30 weekly slots (Mon-Fri, periods 1-6, 60 minutes each)
+CREATE TABLE time_slots (
+    slot_id          INT AUTO_INCREMENT PRIMARY KEY,
+    day_no           TINYINT     NOT NULL,
+    day_name         CHAR(3)     NOT NULL,
+    period_no        TINYINT     NOT NULL,
+    duration_minutes TINYINT     NOT NULL DEFAULT 60,
+    UNIQUE (day_no, period_no)
+);
+
+-- The generated timetable (what the solver writes into).
+-- The two unique keys make clashes impossible:
+--   PRIMARY KEY (class_id, slot_id)  -> a class has only one subject in a slot
+--   UNIQUE (teacher_id, slot_id)     -> a teacher is in only one class in a slot
+CREATE TABLE timetable (
+    class_id   INT         NOT NULL,
+    slot_id    INT         NOT NULL,
+    subject    VARCHAR(60) NOT NULL,
+    teacher_id INT         NOT NULL,
+    PRIMARY KEY (class_id, slot_id),
+    UNIQUE KEY uq_teacher_slot (teacher_id, slot_id),
+    FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+    FOREIGN KEY (slot_id)    REFERENCES time_slots(slot_id),
+    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id)
+);
+
+-- ---------------------------------------------------------------
+-- DATA
+-- ---------------------------------------------------------------
+-- Teachers 9, 14, 20, 23, 25, 34, 41, 50, 55, 60, 61 have no CBSE classes in the PDF.
+INSERT INTO teachers (teacher_id, name) VALUES
+(1,  'Ms. Latha Mohankumar'),
+(2,  'Dr. Jagadeesan Jayashree'),
+(3,  'Ms. Mahalakshmi Venkataraman'),
+(4,  'Mr. Joseph Charles Fernandes'),
+(5,  'Mr. Sockan Sivakumar'),
+(6,  'Ms. Anindita Goswami'),
+(7,  'Ms. Charles Fernandes Rosaline'),
+(8,  'Ms. Chitra Ramesh'),
+(9,  'Ms. Deochake Nilima Kiran'),
+(10, 'Ms. Vashist Garima'),
+(11, 'Ms. Geetha Narasimman'),
+(12, 'Ms. Suprava Jena'),
+(13, 'Ms. Sivakumar Krishnaveni'),
+(14, 'Ms. Milli Samra'),
+(15, 'Ms. Nalini Kumari Vidhya'),
+(16, 'Ms. Natarajan Muthamilselvi'),
+(17, 'Ms. Nair Preethi'),
+(18, 'Ms. Rajalakshmi Geetha'),
+(19, 'Ms. Tripathi Shashi'),
+(20, 'Ms. Savitha Vinodkumar'),
+(21, 'Ms. Sharma Anju Akshay'),
+(22, 'Ms. Shilpa Lamba'),
+(23, 'Ms. Sudha Gundreddy Nagendra Reddy'),
+(24, 'Ms. Palaniappan Unnamalai @ Valliappan Unnamalai'),
+(25, 'Ms. Padmanabhan Nandhini'),
+(26, 'Ms. Das Anindita'),
+(27, 'Ms. Dave Dipal Bhargav'),
+(28, 'Ms. Saravanakumar Maheswari'),
+(29, 'Ms. Kalyani Suyog Bagul'),
+(30, 'Ms. Selvaraj Arpoudamarie'),
+(31, 'Dr. Joseph Lourthu Mary'),
+(32, 'Ms. Gopal Uma Maheswari'),
+(33, 'Dr. Nair Sheeba Gopikuttan'),
+(34, 'Ms. Ghuman Shikha'),
+(35, 'Ms. Bhardwaj Akansha'),
+(36, 'Ms. Choubey Pooja'),
+(37, 'Ms. Thirunellai Subramanian Aishwarya'),
+(38, 'Ms. Swati Raj'),
+(39, 'Ms. Dave Deepika'),
+(40, 'Dr. Muthamizh Selvan Sathiyabama'),
+(41, 'Ms. Dornadula Lakshmi'),
+(42, 'Ms. Ritu Arora'),
+(43, 'Ms. Alpana Sanjay Bangale'),
+(44, 'Mr. Shanmugam Dhandapani'),
+(45, 'Ms. Dua Smriti'),
+(46, 'Ms. Meenakshi Kikan'),
+(47, 'Ms. Shakar Sreejyothy'),
+(48, 'Ms. Krishnamurthy Kanchanamala'),
+(49, 'Ms. Harvande Rupa Sandeep'),
+(50, 'Ms. Anthony Vijayaraj Arun Vinnarasi'),
+(51, 'Mr. Annamalai Minor'),
+(52, 'Ms. Rai Geetika'),
+(53, 'Ms. Meghna Shikha Prasad'),
+(55, 'Ms. Arul Lalitha'),
+(56, 'Ms. Sambandam Hemalatha'),
+(57, 'Dr. Govindasamy Dhanalakshmi'),
+(58, 'Ms. Swati Pundir Chauhan'),
+(59, 'Ms. Saumya Nair'),
+(60, 'Ms. Lalitha Rajalakshmi'),
+(61, 'Ms. Sharma Jagrati'),
+(62, 'Ms. Vijayvargiya Krati'),
+(63, 'Mr. Malayandi Selvaraj'),
+(64, 'Ms. Rajkumar Dhanyapavithra'),
+(65, 'Ms. Kaul Anjuri');
+
+INSERT INTO teacher_classes (teacher_id, subject, class_from, class_to) VALUES
+(1,  'Accountancy', 11, 12),
+(2,  'English Language and Literature', 9, 10),
+(2,  'English Core', 11, 12),
+(3,  'III Language', 6, 8),
+(4,  'ECA', 1, 8),
+(4,  'Music/Dance', 1, 5),
+(4,  'II Language', 5, 6),
+(4,  'II Language', 9, 9),
+(4,  'Games', 2, 2),
+(4,  'Health & Physical Education', 7, 7),
+(4,  'Health & Physical Education', 9, 9),
+(4,  'Health & Physical Education', 11, 11),
+(5,  'Science', 5, 10),
+(5,  'Chemistry', 11, 12),
+(5,  'Health & Physical Education', 10, 10),
+(6,  'EVS', 2, 2),
+(6,  'Science', 3, 4),
+(7,  'II Language', 6, 10),
+(7,  'English', 4, 4),
+(7,  'English', 6, 8),
+(8,  'II Language', 2, 2),
+(8,  'II Language', 6, 9),
+(8,  'English', 5, 5),
+(10, 'Physics', 11, 12),
+(10, 'Health & Physical Education', 12, 12),
+(10, 'General Studies', 11, 12),
+(10, 'Work Education', 11, 12),
+(11, 'Science', 10, 10),
+(11, 'Biology', 11, 12),
+(12, 'Physics', 11, 12),
+(13, 'Chemistry', 12, 12),
+(13, 'Science', 7, 7),
+(15, 'Mathematics', 3, 5),
+(16, 'Mathematics', 9, 10),
+(16, 'Work Education', 9, 10),
+(17, 'Science', 6, 8),
+(18, 'English Core', 11, 12),
+(19, 'Social Science', 6, 6),
+(19, 'Social Science', 9, 10),
+(21, 'Mathematics', 2, 2),
+(21, 'Computer Science', 3, 4),
+(22, 'English', 1, 1),
+(22, 'EVS', 1, 1),
+(24, 'Art Education', 1, 10),
+(26, 'English', 1, 1),
+(26, 'Mathematics', 1, 1),
+(26, 'EVS', 1, 1),
+(26, 'English', 3, 3),
+(27, 'EVS', 2, 2),
+(27, 'English', 2, 2),
+(27, 'Science', 3, 3),
+(27, 'Games', 1, 1),
+(28, 'Mathematics', 7, 10),
+(29, 'Science', 9, 10),
+(29, 'Physics', 11, 12),
+(29, 'Work Education', 9, 10),
+(30, 'EVS', 2, 3),
+(30, 'III Language', 6, 8),
+(31, 'Mathematics', 8, 12),
+(32, 'Mathematics', 6, 8),
+(33, 'Mathematics', 9, 12),
+(35, 'Mathematics', 6, 10),
+(36, 'II Language', 6, 9),
+(37, 'Science', 9, 10),
+(37, 'Physics', 11, 12),
+(38, 'Mathematics', 9, 12),
+(39, 'Mathematics', 6, 9),
+(40, 'II Language', 8, 10),
+(40, 'II Language', 1, 1),
+(40, 'II Language', 3, 3),
+(42, 'Computer Science', 11, 12),
+(43, 'II Language', 1, 2),
+(43, 'II Language', 4, 4),
+(44, 'Science', 10, 10),
+(44, 'Biology', 11, 11),
+(44, 'Health & Physical Education', 6, 6),
+(45, 'Business Studies', 11, 11),
+(45, 'Economics', 11, 12),
+(46, 'II Language', 6, 9),
+(46, 'III Language', 7, 7),
+(47, 'Social Science', 6, 7),
+(47, 'English Language and Literature', 9, 10),
+(48, 'EVS', 1, 1),
+(48, 'Mathematics', 1, 2),
+(48, 'Computer Science', 5, 5),
+(49, 'Economics', 11, 11),
+(51, 'Mathematics', 10, 12),
+(51, 'Health & Physical Education', 8, 8),
+(52, 'II Language', 3, 5),
+(53, 'II Language', 1, 5),
+(56, 'Mathematics', 1, 3),
+(56, 'Games', 3, 3),
+(57, 'II Language', 5, 8),
+(57, 'Games', 4, 5),
+(58, 'EVS', 1, 1),
+(58, 'EVS', 3, 3),
+(59, 'Social Science', 8, 10),
+(62, 'Accountancy', 11, 12),
+(62, 'Business Studies', 11, 12),
+(63, 'Biology', 11, 11),
+(64, 'Business Studies', 11, 11),
+(64, 'Accountancy', 11, 12),
+(65, 'English Language and Literature', 9, 9);
+
+INSERT INTO time_slots (day_no, day_name, period_no)
+SELECT d.day_no, d.day_name, p.period_no
+FROM (SELECT 1 AS day_no, 'Mon' AS day_name UNION ALL SELECT 2, 'Tue' UNION ALL SELECT 3, 'Wed'
+      UNION ALL SELECT 4, 'Thu' UNION ALL SELECT 5, 'Fri') d
+CROSS JOIN (SELECT 1 AS period_no UNION ALL SELECT 2 UNION ALL SELECT 3
+            UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6) p
+ORDER BY d.day_no, p.period_no;
+
+INSERT INTO classes (class_level, section, stream) VALUES
+(1,'A','ALL'),(1,'B','ALL'),   (2,'A','ALL'),(2,'B','ALL'),   (3,'A','ALL'),(3,'B','ALL'),
+(4,'A','ALL'),(4,'B','ALL'),   (5,'A','ALL'),(5,'B','ALL'),   (6,'A','ALL'),(6,'B','ALL'),
+(7,'A','ALL'),(7,'B','ALL'),   (8,'A','ALL'),(8,'B','ALL'),   (9,'A','ALL'),(9,'B','ALL'),
+(10,'A','ALL'),(10,'B','ALL'),
+(11,'A','PCM'),(11,'B','PCB'),(11,'C','COMMERCE'),
+(12,'A','PCM'),(12,'B','PCB'),(12,'C','COMMERCE');
+
+INSERT INTO subject_periods (class_level, stream, subject, periods_per_week) VALUES
+-- Classes 1-2 (30)
+(1,'ALL','English',6),(1,'ALL','Mathematics',6),(1,'ALL','EVS',3),(1,'ALL','II Language',3),
+(1,'ALL','Music/Dance',2),(1,'ALL','Art Education',2),(1,'ALL','Games',4),(1,'ALL','ECA',4),
+(2,'ALL','English',6),(2,'ALL','Mathematics',6),(2,'ALL','EVS',3),(2,'ALL','II Language',3),
+(2,'ALL','Music/Dance',2),(2,'ALL','Art Education',2),(2,'ALL','Games',4),(2,'ALL','ECA',4),
+-- Class 3 (30)
+(3,'ALL','English',5),(3,'ALL','Mathematics',5),(3,'ALL','EVS',2),(3,'ALL','Science',2),
+(3,'ALL','II Language',3),(3,'ALL','Computer Science',1),(3,'ALL','Music/Dance',1),
+(3,'ALL','Art Education',2),(3,'ALL','Games',4),(3,'ALL','ECA',5),
+-- Classes 4-5 (30)
+(4,'ALL','English',5),(4,'ALL','Mathematics',5),(4,'ALL','Science',4),(4,'ALL','II Language',3),
+(4,'ALL','Computer Science',2),(4,'ALL','Music/Dance',1),(4,'ALL','Art Education',2),
+(4,'ALL','Games',4),(4,'ALL','ECA',4),
+(5,'ALL','English',5),(5,'ALL','Mathematics',5),(5,'ALL','Science',4),(5,'ALL','II Language',3),
+(5,'ALL','Computer Science',2),(5,'ALL','Music/Dance',1),(5,'ALL','Art Education',2),
+(5,'ALL','Games',4),(5,'ALL','ECA',4),
+-- Classes 6-8 (30)
+(6,'ALL','English',5),(6,'ALL','Mathematics',5),(6,'ALL','Science',5),(6,'ALL','Social Science',4),
+(6,'ALL','II Language',3),(6,'ALL','III Language',2),(6,'ALL','Art Education',1),
+(6,'ALL','Health & Physical Education',2),(6,'ALL','ECA',3),
+(7,'ALL','English',5),(7,'ALL','Mathematics',5),(7,'ALL','Science',5),(7,'ALL','Social Science',4),
+(7,'ALL','II Language',3),(7,'ALL','III Language',2),(7,'ALL','Art Education',1),
+(7,'ALL','Health & Physical Education',2),(7,'ALL','ECA',3),
+(8,'ALL','English',5),(8,'ALL','Mathematics',5),(8,'ALL','Science',5),(8,'ALL','Social Science',4),
+(8,'ALL','II Language',3),(8,'ALL','III Language',2),(8,'ALL','Art Education',1),
+(8,'ALL','Health & Physical Education',2),(8,'ALL','ECA',3),
+-- Classes 9-10 (30)
+(9,'ALL','English Language and Literature',5),(9,'ALL','Mathematics',6),(9,'ALL','Science',6),
+(9,'ALL','Social Science',5),(9,'ALL','II Language',3),(9,'ALL','Art Education',1),
+(9,'ALL','Health & Physical Education',2),(9,'ALL','Work Education',2),
+(10,'ALL','English Language and Literature',5),(10,'ALL','Mathematics',6),(10,'ALL','Science',6),
+(10,'ALL','Social Science',5),(10,'ALL','II Language',3),(10,'ALL','Art Education',1),
+(10,'ALL','Health & Physical Education',2),(10,'ALL','Work Education',2),
+-- Class 11 (30 each stream)
+(11,'PCM','English Core',4),(11,'PCM','Mathematics',6),(11,'PCM','Physics',6),(11,'PCM','Chemistry',5),
+(11,'PCM','Computer Science',5),(11,'PCM','Health & Physical Education',2),
+(11,'PCM','General Studies',1),(11,'PCM','Work Education',1),
+(11,'PCB','English Core',4),(11,'PCB','Physics',6),(11,'PCB','Chemistry',5),(11,'PCB','Biology',6),
+(11,'PCB','Mathematics',5),(11,'PCB','Health & Physical Education',2),
+(11,'PCB','General Studies',1),(11,'PCB','Work Education',1),
+(11,'COMMERCE','English Core',4),(11,'COMMERCE','Accountancy',6),(11,'COMMERCE','Business Studies',6),
+(11,'COMMERCE','Economics',6),(11,'COMMERCE','Mathematics',4),
+(11,'COMMERCE','Health & Physical Education',2),(11,'COMMERCE','General Studies',1),
+(11,'COMMERCE','Work Education',1),
+-- Class 12 (30 each stream)
+(12,'PCM','English Core',4),(12,'PCM','Mathematics',6),(12,'PCM','Physics',6),(12,'PCM','Chemistry',5),
+(12,'PCM','Computer Science',5),(12,'PCM','Health & Physical Education',2),
+(12,'PCM','General Studies',1),(12,'PCM','Work Education',1),
+(12,'PCB','English Core',4),(12,'PCB','Physics',6),(12,'PCB','Chemistry',5),(12,'PCB','Biology',6),
+(12,'PCB','Mathematics',5),(12,'PCB','Health & Physical Education',2),
+(12,'PCB','General Studies',1),(12,'PCB','Work Education',1),
+(12,'COMMERCE','English Core',4),(12,'COMMERCE','Accountancy',6),(12,'COMMERCE','Business Studies',6),
+(12,'COMMERCE','Economics',6),(12,'COMMERCE','Mathematics',4),
+(12,'COMMERCE','Health & Physical Education',2),(12,'COMMERCE','General Studies',1),
+(12,'COMMERCE','Work Education',1);
+
+SELECT subject_periods.class_level, classes.section,subject_periods.subject,subject_periods.stream, teacher_classes.teacher_id, teachers.name
+from subject_periods, teacher_classes, teachers,classes
+where subject_periods.subject = teacher_classes.subject
+and subject_periods.class_level between teacher_classes.class_from and teacher_classes.class_to
+and teacher_classes.teacher_id = teachers.teacher_id
+and classes.class_level = subject_periods.class_level;
+
+select sum(periods_per_week),class_level,stream
+from subject_periods
+group by class_level,stream;
+
+CREATE TABLE teacher_assignments (
+	class_level int,
+    section varchar(1),
+    subject varchar(60),
+    stream varchar(20),
+    teacher_id int,
+    name varchar(100)
+);
+truncate table teacher_assignments;
+
+insert into teacher_assignments 
+SELECT subject_periods.class_level, classes.section,subject_periods.subject,subject_periods.stream, teacher_classes.teacher_id, teachers.name
+from subject_periods, teacher_classes, teachers,classes
+where subject_periods.subject = teacher_classes.subject
+and subject_periods.class_level between teacher_classes.class_from and teacher_classes.class_to
+and teacher_classes.teacher_id = teachers.teacher_id
+and classes.class_level = subject_periods.class_level;
+
+
+delete from teacher_assignments
+where class_level in (11,12)
+and ((stream = "COMMERCE" and section != "C")
+or (stream = "PCM" and section != "B")
+or (stream = "PCB" and section != "A"));
+
+select * from teacher_assignments order by class_level,section;
+describe teacher_assignments;
+
+
