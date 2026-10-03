@@ -1,23 +1,47 @@
-#getting started with the file
 import mysql.connector
+import random
+
 connection = mysql.connector.connect(
     host="localhost",
     user="root",
     passwd="Ammaappa@24",
-    database="timetable"
+    database="timetable_v2"
 )
+
 cursor = connection.cursor()
-teacher_level =  """
-SELECT subject_periods.class_level, classes.section,subject_periods.subject,subject_periods.stream, teacher_classes.teacher_id, teachers.name
-FROM subject_periods, teacher_classes, teachers,classes
-WHERE subject_periods.subject = teacher_classes.subject
-AND subject_periods.class_level between teacher_classes.class_from and teacher_classes.class_to
-AND teacher_classes.teacher_id = teachers.teacher_id
-AND classes.class_level = subject_periods.class_level
-ORDER BY subject,class_level,section;"""
-cursor.execute(teacher_level)
-print(cursor.fetchall())
 
+select = "SELECT * FROM teacher_assignments"
+cursor.execute(select)
 
+values = cursor.fetchall()
+
+for i in values:
+    select_specific = """
+    SELECT * FROM teacher_assignments
+    WHERE class_level = {}
+    AND section = "{}"
+    AND subject = "{}"
+    """.format(i[0], i[1], i[2])
+
+    cursor.execute(select_specific)
+
+    teachers = cursor.fetchall()
+
+    chosen_teacher = random.choice(teachers)
+
+    for j in teachers:
+        if chosen_teacher == j:
+            continue
+        else:
+            remove = """
+            DELETE FROM teacher_assignments
+            WHERE class_level = {}
+            AND section = "{}"
+            AND subject = "{}"
+            AND teacher_id = {}
+            """.format(j[0], j[1], j[2], j[4])
+
+            cursor.execute(remove)
+            connection.commit()
 
 connection.close()
